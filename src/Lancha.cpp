@@ -10,14 +10,11 @@
 #include <ThingSpeak.h>
 #include <esp_sleep.h>
 
-
-
 unsigned long myChannelNumber = 38484;
-const char * myWriteAPIKey = "*************";
+const char * myWriteAPIKey = "UW9T0WNPQPVY7QPB";
 WiFiClient  client;
 
-
-char blynk_token[34] = "********************";
+char blynk_token[34] = "591b947a24354dd085ef3ae6d7ffa399";
 
 const int led = 19;
 const int pin_adc_1 = 35; //GPIO usado para captura analógica
@@ -28,14 +25,6 @@ uint16_t n=0;
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP  60        /* Time ESP32 will go to sleep (in seconds) */
 RTC_DATA_ATTR int bootCount = 0;
-
-// void configModeCallback (WiFiManager *myWiFiManager) {
-//   Serial.println("Entered config mode");
-//   Serial.println(WiFi.softAPIP());
-//   //if you used auto generated SSID, print it
-//   Serial.println(myWiFiManager->getConfigPortalSSID());
-//   //entered config mode, make led toggle faster
-// }
 
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -53,8 +42,6 @@ void setup() {
   Serial.begin(115200);
 
   //read configuration from FS json
-  //clean FS, for testing
-  // SPIFFS.format();
   Serial.println("mounting FS...");
 
   if (SPIFFS.begin()) {
@@ -75,9 +62,7 @@ void setup() {
         json.printTo(Serial);
         if (json.success()) {
           Serial.println("\nparsed json");
-
           strcpy(blynk_token, json["blynk_token"]);
-
         } else {
           Serial.println("failed to load json config");
         }
@@ -90,15 +75,11 @@ void setup() {
   //end read
 
   WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 34);
-
   WiFiManager wifiManager;
 
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   // wifiManager.resetSettings();      //limpa todos os wifi salvos para testar o portal
-
-  //set static ip
-  // wifiManager.setSTAStaticIPConfig(IPAddress(10,0,1,99), IPAddress(10,0,1,1), IPAddress(255,255,255,0));
 
   wifiManager.addParameter(&custom_blynk_token);
 
@@ -112,10 +93,6 @@ void setup() {
 
   //read updated parameters
   strcpy(blynk_token, custom_blynk_token.getValue());
-  // wifiManager.autoConnect("ESP32");
-  // Serial.println(custom_blynk_token.getValue());
-  // Blynk.config(custom_blynk_token.getValue());
-  // Blynk.begin(blynk_token, "Virus_online", "smolder79");
 
   //save the custom parameters to FS
   if (shouldSaveConfig) {
