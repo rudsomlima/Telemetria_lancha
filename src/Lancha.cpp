@@ -158,8 +158,8 @@ float readTemp()
   Wire.requestFrom(TMP75_Address, numOfBytes); // Address the TMP75 and set number of bytes to receive
   int8_t MostSigByte, LeastSigByte;
   while (Wire.available()) { // Checkf for data from slave
-    int8_t MostSigByte = Wire.read();  // Read the first byte this is the MSB
-    int8_t LeastSigByte = Wire.read(); // Now Read the second byte this is the LSB
+    MostSigByte = Wire.read();  // Read the first byte this is the MSB
+    LeastSigByte = Wire.read(); // Now Read the second byte this is the LSB
     Serial.println("Fez a medida da temperatura");
   }
 
