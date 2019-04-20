@@ -9,6 +9,7 @@
 #include <WiFiManager.h>       //https://github.com/tzapu/WiFiManager
 #include <ThingSpeak.h>
 #include <esp_sleep.h>
+#include <Wire.h> // Wire header file for I2C and 2 wire
 
 unsigned long myChannelNumber = 38484;
 const char * myWriteAPIKey = "UW9T0WNPQPVY7QPB";
@@ -34,6 +35,19 @@ void saveConfigCallback () {
   Serial.println("Should save config");
   shouldSaveConfig = true;
 }
+
+//Configurações TMP75
+float lastTemp;
+float lastHum;
+int metric = true;
+
+int8_t TMP75_Address = 0x48; //
+int8_t configReg = 0x01;     // Address of Configuration Register
+int8_t bitConv = 0x60;       //01100000;  // Set to 12 bit conversion
+int8_t rdWr = 0x01;          // Set to read write
+int8_t rdOnly = 0x00;        // Set to Read
+int decPlaces = 1;
+int numOfBytes = 2;
 
 void setup() {
   pinMode(led, OUTPUT);
@@ -125,6 +139,33 @@ void setup() {
   ThingSpeak.begin(client);
   // esp_deep_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+
+  //Setup TMP75
+  Wire.begin();                          //  Wire.begin(SDA,SCL,BUS_SPEED);     Join the I2C bus as a master
+  Wire.beginTransmission(TMP75_Address); // Address the TMP75 sensor
+  Wire.write(configReg);                 // Address the Configuration register
+  Wire.write(bitConv);                   // Set the temperature resolution
+  Wire.endTransmission();                // Stop transmitting
+  Wire.beginTransmission(TMP75_Address); // Address the TMP75 sensor
+  Wire.write(rdOnly);                    // Address the Temperature register
+  Wire.endTransmission();                // Stop transmitting
+}
+
+// Begin the reading the TMP75 Sensor
+float readTemp()
+{
+  // Now take a Temerature Reading
+  Wire.requestFrom(TMP75_Address, numOfBytes); // Address the TMP75 and set number of bytes to receive
+  int8_t MostSigByte = Wire.read();            // Read the first byte this is the MSB
+  int8_t LeastSigByte = Wire.read();           // Now Read the second byte this is the LSB
+
+  // Being a 12 bit integer use 2's compliment for negative temperature values
+  int TempSum = (((MostSigByte << 8) | LeastSigByte) >> 4);
+  // From Datasheet the TMP75 has a quantisation value of 0.0625 degreesC per bit
+  float temp = (TempSum * 0.0625);
+  //Serial.println(MostSigByte, BIN);   // Uncomment for debug of binary data from Sensor
+  //Serial.println(LeastSigByte, BIN);  // Uncomment for debug  of Binary data from Sensor
+  return temp; // Return the temperature value
 }
 
 void loop() {
@@ -139,6 +180,9 @@ void loop() {
   Serial.print(n);
   Serial.print(" - bat_12v: ");
   Serial.println(tensao_2);
+  float temperature = readTemp();
+  Serial.print("TMP75: ");
+  Serial.println(temperature);
 
   //Blynk
   Blynk.virtualWrite(V1, tensao_1);
