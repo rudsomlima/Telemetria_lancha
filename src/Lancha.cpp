@@ -141,7 +141,7 @@ void setup() {
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
 
   //Setup TMP75
-  Wire.begin();                          //  Wire.begin(SDA,SCL,BUS_SPEED);     Join the I2C bus as a master
+  Wire.begin();                            //  Wire.begin(SDA,SCL,BUS_SPEED);     Join the I2C bus as a master
   Wire.beginTransmission(TMP75_Address); // Address the TMP75 sensor
   Wire.write(configReg);                 // Address the Configuration register
   Wire.write(bitConv);                   // Set the temperature resolution
@@ -156,8 +156,12 @@ float readTemp()
 {
   // Now take a Temerature Reading
   Wire.requestFrom(TMP75_Address, numOfBytes); // Address the TMP75 and set number of bytes to receive
-  int8_t MostSigByte = Wire.read();            // Read the first byte this is the MSB
-  int8_t LeastSigByte = Wire.read();           // Now Read the second byte this is the LSB
+  int8_t MostSigByte, LeastSigByte;
+  while (Wire.available()) { // Checkf for data from slave
+    int8_t MostSigByte = Wire.read();  // Read the first byte this is the MSB
+    int8_t LeastSigByte = Wire.read(); // Now Read the second byte this is the LSB
+    Serial.println("Fez a medida da temperatura");
+  }
 
   // Being a 12 bit integer use 2's compliment for negative temperature values
   int TempSum = (((MostSigByte << 8) | LeastSigByte) >> 4);
@@ -165,7 +169,7 @@ float readTemp()
   float temp = (TempSum * 0.0625);
   //Serial.println(MostSigByte, BIN);   // Uncomment for debug of binary data from Sensor
   //Serial.println(LeastSigByte, BIN);  // Uncomment for debug  of Binary data from Sensor
-  return temp; // Return the temperature value
+  return temp; // Return the temperature value  
 }
 
 void loop() {
