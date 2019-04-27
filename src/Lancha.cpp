@@ -39,31 +39,21 @@ void saveConfigCallback () {
 
 void print_wakeup_reason(){
   esp_sleep_wakeup_cause_t wakeup_reason;
-  String reason = "";
+  //String reason = "";
   wakeup_reason = esp_sleep_get_wakeup_cause(); //recupera a causa do despertar
+  Serial.print("Motivo do wake up: ");
+  Serial.println(wakeup_reason);
   switch (wakeup_reason)
   {
-  case 1:
-    reason = "EXT0 RTC_IO BTN";
-    break;
-  case 2:
-    reason = "EXT1 RTC_CNTL";
-    break;
-  case 3:
-    reason = "TIMER";
-    break;
-  case 4:
-    reason = "TOUCHPAD";
-    break;
-  case 5:
-    reason = "ULP PROGRAM";
-    break;
-  default:
-    reason = "NO DS CAUSE";
-    break;
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
+    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
   }
   Serial.print("Motivo do wake up: ");
-  Serial.println(reason);
+  Serial.println(wakeup_reason);
 }
 
 void setup() {
@@ -72,6 +62,7 @@ void setup() {
   digitalWrite(led,HIGH);
   bootCount++;
   Serial.begin(9600);
+  Serial.println("");
   Wire.begin();
   //esp_set_deep_sleep_wake_stub;
   //função para imprimir a causa do ESP32 despertar
@@ -121,7 +112,7 @@ void setup() {
   wifiManager.addParameter(&custom_blynk_token);
   Blynk.config(custom_blynk_token.getValue());
 
-  if (!wifiManager.autoConnect("ESP32", "smolder79")) {
+  if (!wifiManager.autoConnect("ESP32")) {
     Serial.println("failed to connect and hit timeout");
     delay(3000);
     //reset and try again, or maybe put it to deep sleep
@@ -179,18 +170,17 @@ void loop() {
   Serial.print(n);
   Serial.print(" - bat_12v: ");
   Serial.println(tensao_2);
-  //float temperature = readTemp();
   
   Serial.print("Temperature = ");
   float temp = temperature.readTemperatureC();
   Serial.print(temp);
   Serial.println(" C");
-  Serial.print("SDA: ");
-  Serial.println(SDA);
-  Serial.print("SCL: ");
-  Serial.println(SCL);
-  Serial.print("Clock: ");
-  Serial.println(Wire.getClock());
+  //Serial.print("SDA: ");
+  //Serial.println(SDA);
+  //Serial.print("SCL: ");
+  //Serial.println(SCL);
+  //Serial.print("Clock: ");
+  //Serial.println(Wire.getClock());
 
   //Blynk
   Blynk.connect(); 
