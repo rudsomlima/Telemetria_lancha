@@ -9,13 +9,15 @@
 #include <WiFiManager.h>       //https://github.com/tzapu/WiFiManager
 #include <ThingSpeak.h>
 #include <esp_sleep.h>
-#include <Wire.h> // Wire header file for I2C and 2 wire
+#include <Temperature_LM75_Derived.h>
+Generic_LM75 temperature;
+
 
 unsigned long myChannelNumber = 38484;
 const char * myWriteAPIKey = "UW9T0WNPQPVY7QPB";
 WiFiClient  client;
 
-char blynk_token[34] = "591b947a24354dd085ef3ae6d7ffa399";
+char blynk_token[33] = "591b947a24354dd085ef3ae6d7ffa399";
 
 const int led = 19;
 const int pin_adc_1 = 35; //GPIO usado para captura analógica
@@ -36,24 +38,13 @@ void saveConfigCallback () {
   shouldSaveConfig = true;
 }
 
-//Configurações TMP75
-float lastTemp;
-float lastHum;
-int metric = true;
-
-int8_t TMP75_Address = 0x48; //
-int8_t configReg = 0x01;     // Address of Configuration Register
-int8_t bitConv = 0x60;       //01100000;  // Set to 12 bit conversion
-int8_t rdWr = 0x01;          // Set to read write
-int8_t rdOnly = 0x00;        // Set to Read
-int decPlaces = 1;
-int numOfBytes = 2;
-
 void setup() {
+  delay(1000);
   pinMode(led, OUTPUT);
   digitalWrite(led,HIGH);
   bootCount++;
-  Serial.begin(115200);
+  Serial.begin(9600);
+  Wire.begin();
 
   //read configuration from FS json
   Serial.println("mounting FS...");
@@ -88,7 +79,7 @@ void setup() {
   }
   //end read
 
-  WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 34);
+  WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 33);
   WiFiManager wifiManager;
 
   //set config save notify callback
@@ -96,6 +87,7 @@ void setup() {
   // wifiManager.resetSettings();      //limpa todos os wifi salvos para testar o portal
 
   wifiManager.addParameter(&custom_blynk_token);
+  Blynk.config(custom_blynk_token.getValue());
 
   if (!wifiManager.autoConnect("ESP32", "smolder79")) {
     Serial.println("failed to connect and hit timeout");
@@ -135,44 +127,15 @@ void setup() {
 	// adcStart(pin_adc);
 	analogReadResolution(10); // Default of 12 is not very linear. Recommended to use 10 or 11 depending on needed resolution.
 	// analogSetAttenuation(ADC_6db); // Default is 11db which is very noisy. Recommended to use 2.5 or 6.
-  // pinMode(pin_adc, INPUT); //Pino utilizado para captura analógica
   ThingSpeak.begin(client);
-  // esp_deep_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+  Blynk.config(blynk_token);  
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
 
-  //Setup TMP75
-  Wire.begin();                            //  Wire.begin(SDA,SCL,BUS_SPEED);     Join the I2C bus as a master
-  Wire.beginTransmission(TMP75_Address); // Address the TMP75 sensor
-  Wire.write(configReg);                 // Address the Configuration register
-  Wire.write(bitConv);                   // Set the temperature resolution
-  Wire.endTransmission();                // Stop transmitting
-  Wire.beginTransmission(TMP75_Address); // Address the TMP75 sensor
-  Wire.write(rdOnly);                    // Address the Temperature register
-  Wire.endTransmission();                // Stop transmitting
-}
-
-// Begin the reading the TMP75 Sensor
-float readTemp()
-{
-  // Now take a Temerature Reading
-  Wire.requestFrom(TMP75_Address, numOfBytes); // Address the TMP75 and set number of bytes to receive
-  int8_t MostSigByte, LeastSigByte;
-  while (Wire.available()) { // Checkf for data from slave
-    MostSigByte = Wire.read();  // Read the first byte this is the MSB
-    LeastSigByte = Wire.read(); // Now Read the second byte this is the LSB
-    Serial.println("Fez a medida da temperatura");
-  }
-
-  // Being a 12 bit integer use 2's compliment for negative temperature values
-  int TempSum = (((MostSigByte << 8) | LeastSigByte) >> 4);
-  // From Datasheet the TMP75 has a quantisation value of 0.0625 degreesC per bit
-  float temp = (TempSum * 0.0625);
-  //Serial.println(MostSigByte, BIN);   // Uncomment for debug of binary data from Sensor
-  //Serial.println(LeastSigByte, BIN);  // Uncomment for debug  of Binary data from Sensor
-  return temp; // Return the temperature value  
+            // Stop transmitting
 }
 
 void loop() {
+  delay(100);  
   int bat_int = analogRead(pin_adc_1);
   int bat_12v = analogRead(pin_adc_2);
   float tensao_1 = bat_int*3.3/1024;
@@ -184,19 +147,31 @@ void loop() {
   Serial.print(n);
   Serial.print(" - bat_12v: ");
   Serial.println(tensao_2);
-  float temperature = readTemp();
-  Serial.print("TMP75: ");
-  Serial.println(temperature);
+  //float temperature = readTemp();
+  
+  Serial.print("Temperature = ");
+  float temp = temperature.readTemperatureC();
+  Serial.print(temp);
+  Serial.println(" C");
+  Serial.print("SDA: ");
+  Serial.println(SDA);
+  Serial.print("SCL: ");
+  Serial.println(SCL);
+  Serial.print("Clock: ");
+  Serial.println(Wire.getClock());
 
   //Blynk
+  Blynk.connect(); 
   Blynk.virtualWrite(V1, tensao_1);
   Blynk.virtualWrite(V2, tensao_2);
   Blynk.virtualWrite(V3, bootCount);
+  Blynk.virtualWrite(V4, temp);  
 
   //ThingSpeak
   ThingSpeak.setField(1, tensao_1);
   ThingSpeak.setField(2, tensao_2);
   ThingSpeak.setField(3, bootCount);
+  ThingSpeak.setField(4, temp);
   // set the status
   ThingSpeak.setStatus("ONLINE");
 
