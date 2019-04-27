@@ -12,7 +12,6 @@
 #include <Temperature_LM75_Derived.h>
 Generic_LM75 temperature;
 
-
 unsigned long myChannelNumber = 38484;
 const char * myWriteAPIKey = "UW9T0WNPQPVY7QPB";
 WiFiClient  client;
@@ -38,6 +37,35 @@ void saveConfigCallback () {
   shouldSaveConfig = true;
 }
 
+void print_wakeup_reason(){
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  String reason = "";
+  wakeup_reason = esp_sleep_get_wakeup_cause(); //recupera a causa do despertar
+  switch (wakeup_reason)
+  {
+  case 1:
+    reason = "EXT0 RTC_IO BTN";
+    break;
+  case 2:
+    reason = "EXT1 RTC_CNTL";
+    break;
+  case 3:
+    reason = "TIMER";
+    break;
+  case 4:
+    reason = "TOUCHPAD";
+    break;
+  case 5:
+    reason = "ULP PROGRAM";
+    break;
+  default:
+    reason = "NO DS CAUSE";
+    break;
+  }
+  Serial.print("Motivo do wake up: ");
+  Serial.println(reason);
+}
+
 void setup() {
   delay(1000);
   pinMode(led, OUTPUT);
@@ -45,6 +73,10 @@ void setup() {
   bootCount++;
   Serial.begin(9600);
   Wire.begin();
+  //esp_set_deep_sleep_wake_stub;
+  //função para imprimir a causa do ESP32 despertar
+  print_wakeup_reason();
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low
 
   //read configuration from FS json
   Serial.println("mounting FS...");
