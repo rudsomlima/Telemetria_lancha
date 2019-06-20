@@ -10,6 +10,7 @@
 #include <ThingSpeak.h>
 #include <esp_sleep.h>
 #include <Temperature_LM75_Derived.h>
+#include "driver/rtc_io.h"
 Generic_LM75 temperature;
 
 esp_sleep_wakeup_cause_t wakeup_reason;
@@ -24,7 +25,7 @@ const int led = 19;
 const int pin_adc_1 = 35; //GPIO usado para captura analógica
 const int pin_adc_2 = 32; //GPIO usado para captura analógica
 uint16_t n=0;
-uint8_t bomba;
+uint8_t bomba=0;
 // String myStatus = "";
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
@@ -42,10 +43,13 @@ void saveConfigCallback () {
 
 void publica_web();
 
-void bomba_ligou() {
+void IRAM_ATTR bomba_ligou()
+{
+  //detachInterrupt(2);
   bomba=0;
-  publica_web();
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low //GPIO 02 //volta a habilitar a int da bomba
+  Serial.print("Bomba: ");
+  Serial.println(bomba);
+  Serial.print("Bomba desligou e foi dormir");
   esp_deep_sleep_start();   //se a bomba desligou pode ir domir
 }
 
@@ -57,58 +61,66 @@ void print_wakeup_reason(){
   Serial.println(wakeup_reason);
   switch (wakeup_reason)
   {
-    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT0 : {
+      Serial.println("Wakeup caused by external signal using RTC_IO");
+      ESP_ERROR_CHECK_WITHOUT_ABORT(esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0));
+      //esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+      ESP_ERROR_CHECK_WITHOUT_ABORT(rtc_gpio_deinit(GPIO_NUM_2));
+
+      break;
+      }
     case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
     case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
     case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
     case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
     default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
   }
-  if (wakeup_reason==2) {   //acordou pela bomba
-    bomba=1;
-  }
-  else {
-    bomba=0;
-  }
 }
 
 void setup() {
   delay(1000);
   pinMode(led, OUTPUT);
+  pinMode(2, INPUT_PULLUP);
   digitalWrite(led,HIGH);
   bootCount++;
   Serial.begin(9600);
   Serial.println("");
   Wire.begin();
-  //esp_set_deep_sleep_wake_stub;
+
   //função para imprimir a causa do ESP32 despertar
   print_wakeup_reason();
+  pinMode(2, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(2), bomba_ligou, FALLING);
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low //GPIO 02 //volta a habilitar a int da bomba
-  attachInterrupt(digitalPinToInterrupt(GPIO_NUM_2), bomba_ligou, CHANGE);
+  
 
-  //read configuration from FS json
-  Serial.println("mounting FS...");
+    //read configuration from FS json
+    Serial.println("mounting FS...");
 
-  if (SPIFFS.begin()) {
-    Serial.println("mounted file system");
-    if (SPIFFS.exists("/config.json")) {
-      //file exists, reading and loading
-      Serial.println("reading config file");
-      File configFile = SPIFFS.open("/config.json", "r");
-      if (configFile) {
-        Serial.println("opened config file");
-        size_t size = configFile.size();
-        // Allocate a buffer to store contents of the file.
-        std::unique_ptr<char[]> buf(new char[size]);
+    if (SPIFFS.begin())
+    {
+      Serial.println("mounted file system");
+      if (SPIFFS.exists("/config.json"))
+      {
+        //file exists, reading and loading
+        Serial.println("reading config file");
+        File configFile = SPIFFS.open("/config.json", "r");
+        if (configFile)
+        {
+          Serial.println("opened config file");
+          size_t size = configFile.size();
+          // Allocate a buffer to store contents of the file.
+          std::unique_ptr<char[]> buf(new char[size]);
 
-        configFile.readBytes(buf.get(), size);
-        DynamicJsonBuffer jsonBuffer;
-        JsonObject& json = jsonBuffer.parseObject(buf.get());
-        json.printTo(Serial);
-        if (json.success()) {
-          Serial.println("\nparsed json");
-          strcpy(blynk_token, json["blynk_token"]);
-        } else {
+          configFile.readBytes(buf.get(), size);
+          DynamicJsonBuffer jsonBuffer;
+          JsonObject &json = jsonBuffer.parseObject(buf.get());
+          json.printTo(Serial);
+          if (json.success())
+          {
+            Serial.println("\nparsed json");
+            strcpy(blynk_token, json["blynk_token"]);
+          } else {
           Serial.println("failed to load json config");
         }
         configFile.close();
@@ -236,15 +248,15 @@ void publica_web() {
 }
 
 void loop() {
-  delay(100);
-  publica_web();
-  
+  delay(500);
+  publica_web();  
   digitalWrite(led,LOW);
-  
-  if(bomba==0) esp_deep_sleep_start(); //se a bomba nao foi ligada, pode ir domir
-  else {
-    delay(600000);  //senão espera 1 min pra publicar td de novo
-  }
+  if(bomba==0) {
+    Serial.println("Bomba não foi ligada. Indo dormir");
+    esp_deep_sleep_start(); //se a bomba nao foi ligada, pode ir domir
+    }
+  delay(500);
+  digitalWrite(led, HIGH);
 
   // int state = digitalRead(LED_BUILTIN);
   // digitalWrite(LED_BUILTIN, !state);
