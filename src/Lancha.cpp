@@ -12,6 +12,8 @@
 #include <Temperature_LM75_Derived.h>
 Generic_LM75 temperature;
 
+esp_sleep_wakeup_cause_t wakeup_reason;
+
 unsigned long myChannelNumber = 38484;
 const char * myWriteAPIKey = "UW9T0WNPQPVY7QPB";
 WiFiClient  client;
@@ -22,6 +24,7 @@ const int led = 19;
 const int pin_adc_1 = 35; //GPIO usado para captura analógica
 const int pin_adc_2 = 32; //GPIO usado para captura analógica
 uint16_t n=0;
+uint8_t bomba;
 // String myStatus = "";
 
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
@@ -37,8 +40,17 @@ void saveConfigCallback () {
   shouldSaveConfig = true;
 }
 
+void publica_web();
+
+void bomba_ligou() {
+  bomba=0;
+  publica_web();
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low //GPIO 02 //volta a habilitar a int da bomba
+  esp_deep_sleep_start();   //se a bomba desligou pode ir domir
+}
+
 void print_wakeup_reason(){
-  esp_sleep_wakeup_cause_t wakeup_reason;
+  
   //String reason = "";
   wakeup_reason = esp_sleep_get_wakeup_cause(); //recupera a causa do despertar
   Serial.print("Motivo do wake up: ");
@@ -52,8 +64,12 @@ void print_wakeup_reason(){
     case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
     default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
   }
-  Serial.print("Motivo do wake up: ");
-  Serial.println(wakeup_reason);
+  if (wakeup_reason==2) {   //acordou pela bomba
+    bomba=1;
+  }
+  else {
+    bomba=0;
+  }
 }
 
 void setup() {
@@ -67,7 +83,8 @@ void setup() {
   //esp_set_deep_sleep_wake_stub;
   //função para imprimir a causa do ESP32 despertar
   print_wakeup_reason();
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low //GPIO 02 //volta a habilitar a int da bomba
+  attachInterrupt(digitalPinToInterrupt(GPIO_NUM_2), bomba_ligou, CHANGE);
 
   //read configuration from FS json
   Serial.println("mounting FS...");
@@ -141,7 +158,7 @@ void setup() {
     //end save
   }
 
-  Serial.println("local ip");
+  Serial.print("local ip: ");
   Serial.println(WiFi.localIP());
   Serial.println("ESP conectado no WIFI !");
   adcAttachPin(pin_adc_1);
@@ -157,12 +174,11 @@ void setup() {
             // Stop transmitting
 }
 
-void loop() {
-  delay(100);  
+void publica_web() {
   int bat_int = analogRead(pin_adc_1);
   int bat_12v = analogRead(pin_adc_2);
-  float tensao_1 = bat_int*3.3/1024;
-  float tensao_2 = bat_12v*3.3/1024;
+  float tensao_1 = bat_int * 3.3 / 1024;
+  float tensao_2 = bat_12v * 3.3 / 1024;
   // // print out the value you read:
   Serial.print(bootCount);
   Serial.print(" - bat_int: ");
@@ -170,11 +186,12 @@ void loop() {
   Serial.print(n);
   Serial.print(" - bat_12v: ");
   Serial.println(tensao_2);
-  
-  Serial.print("Temperature = ");
-  float temp = temperature.readTemperatureC();
-  Serial.print(temp);
-  Serial.println(" C");
+  Serial.print("Bomba: ");
+  Serial.println(bomba);
+  //Serial.print("Temperature = ");
+  //float temp = temperature.readTemperatureC();
+  //Serial.print(temp);
+  //Serial.println(" C");
   //Serial.print("SDA: ");
   //Serial.println(SDA);
   //Serial.print("SCL: ");
@@ -183,30 +200,51 @@ void loop() {
   //Serial.println(Wire.getClock());
 
   //Blynk
-  Blynk.connect(); 
+  Blynk.connect();
   Blynk.virtualWrite(V1, tensao_1);
   Blynk.virtualWrite(V2, tensao_2);
   Blynk.virtualWrite(V3, bootCount);
-  Blynk.virtualWrite(V4, temp);  
-
+  //Blynk.virtualWrite(V4, temp);
+  if (bomba==1) //se acordou por causa da interrupção e a bomba está ligada
+  {                            
+    Blynk.virtualWrite(V4, 1); //manda 1 indicando bomba ligada
+    ThingSpeak.setField(4, 1);
+  }
+  else
+  {
+    Blynk.virtualWrite(V4, 0); //manda 1 indicando bomba desligada
+    ThingSpeak.setField(4, 0);
+  }
   //ThingSpeak
   ThingSpeak.setField(1, tensao_1);
   ThingSpeak.setField(2, tensao_2);
   ThingSpeak.setField(3, bootCount);
-  ThingSpeak.setField(4, temp);
+  //ThingSpeak.setField(4, temp);
   // set the status
   ThingSpeak.setStatus("ONLINE");
 
   // write to the ThingSpeak channel
   int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
-  if(x == 200){
+  if (x == 200)
+  {
     Serial.println("Channel update successful.");
   }
-  else{
-    Serial.println("Problem updating channel. HTTP error code " + String(x));
+  else
+  {
+    Serial.println("Problem updating channel Thingspeak. HTTP error code " + String(x));
   }
+}
+
+void loop() {
+  delay(100);
+  publica_web();
+  
   digitalWrite(led,LOW);
-  esp_deep_sleep_start ();
+  
+  if(bomba==0) esp_deep_sleep_start(); //se a bomba nao foi ligada, pode ir domir
+  else {
+    delay(600000);  //senão espera 1 min pra publicar td de novo
+  }
 
   // int state = digitalRead(LED_BUILTIN);
   // digitalWrite(LED_BUILTIN, !state);
