@@ -56,7 +56,6 @@ void IRAM_ATTR bomba_desligou()
 
 void print_wakeup_reason()
 {
-
   //String reason = "";
   wakeup_reason = esp_sleep_get_wakeup_cause(); //recupera a causa do despertar
   Serial.print("Motivo do wake up: ");
@@ -150,6 +149,7 @@ void setup()
 
   WiFiManagerParameter custom_blynk_token("blynk", "blynk token", blynk_token, 33);
   WiFiManager wifiManager;
+  wifiManager.setConfigPortalTimeout(180);  //Se o portal não conectar em 180 s, reseta
 
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
