@@ -25,7 +25,8 @@ const int led = 19;
 const int pin_adc_1 = 35; //GPIO usado para captura analógica
 const int pin_adc_2 = 32; //GPIO usado para captura analógica
 uint16_t n = 0;
-uint8_t bomba = 0;
+bool bomba = 0;
+bool bomba_desl = 0;
 // String myStatus = "";
 
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
@@ -46,12 +47,11 @@ void publica_web();
 
 void IRAM_ATTR bomba_desligou()
 {
-  //detachInterrupt(2);
+  detachInterrupt(15);
   bomba = 0;
+  bomba_desl = 1;
   Serial.print("Bomba: ");
-  Serial.println(bomba);
-  Serial.print("Bomba desligou e foi dormir");
-  esp_deep_sleep_start(); //se a bomba desligou pode ir domir
+  Serial.println(bomba);  
 }
 
 void print_wakeup_reason()
@@ -236,20 +236,14 @@ void publica_web()
   Blynk.virtualWrite(V2, tensao_2);
   Blynk.virtualWrite(V3, bootCount);
   //Blynk.virtualWrite(V4, temp);
-  if (bomba == 1) //se acordou por causa da interrupção e a bomba está ligada
-  {
-    Blynk.virtualWrite(V4, 1); //manda 1 indicando bomba ligada
-    ThingSpeak.setField(4, 1);
-  }
-  else
-  {
-    Blynk.virtualWrite(V4, 0); //manda 1 indicando bomba desligada
-    ThingSpeak.setField(4, 0);
-  }
+  if(bomba==1)  Blynk.virtualWrite(V4, 255); //manda o estado da bomba
+  else Blynk.virtualWrite(V4, 0); //manda o estado da bomba
+
   //ThingSpeak
   ThingSpeak.setField(1, tensao_1);
   ThingSpeak.setField(2, tensao_2);
   ThingSpeak.setField(3, bootCount);
+  ThingSpeak.setField(4, bomba);
   //ThingSpeak.setField(4, temp);
   // set the status
   ThingSpeak.setStatus("ONLINE");
@@ -258,7 +252,7 @@ void publica_web()
   int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
   if (x == 200)
   {
-    Serial.println("Channel update successful.");
+    Serial.println("Channel thingspeak update successful.");
   }
   else
   {
@@ -268,17 +262,24 @@ void publica_web()
 
 void loop()
 {
-  delay(500);
+  delay(250);
   publica_web();
   digitalWrite(led, LOW);
   if (bomba == 0)
-  {
+  {    
     Serial.println("Bomba não foi ligada. Indo dormir");
     esp_deep_sleep_start(); //se a bomba nao foi ligada, pode ir domir
   }
-  delay(500);
-  digitalWrite(led, HIGH);
-
+  while (bomba_desl==0)
+  {
+    digitalWrite(led, HIGH);
+    delay(250);
+    digitalWrite(led, LOW);    
+    delay(250);
+  }
+  publica_web();
+  Serial.print("Bomba desligou e foi dormir");
+  esp_deep_sleep_start(); //se a bomba desligou pode ir domir
   // int state = digitalRead(LED_BUILTIN);
   // digitalWrite(LED_BUILTIN, !state);
 }
