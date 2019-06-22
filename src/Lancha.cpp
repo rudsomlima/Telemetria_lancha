@@ -9,9 +9,17 @@
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 #include <ThingSpeak.h>
 #include <esp_sleep.h>
-#include <Temperature_LM75_Derived.h>
-#include "driver/rtc_io.h"
-Generic_LM75 temperature;
+//#include <Temperature_LM75_Derived.h>
+#include <wire.h>
+#include "SSD1306.h"
+//Generic_LM75 temperature;
+
+// Pin definitions for I2C
+#define OLED_SDA 26 // pin 26
+#define OLED_SDC 25 // pin 25
+#define OLED_ADDR 0x78
+
+SSD1306 display(OLED_ADDR, OLED_SDA, OLED_SDC); // For I2C
 
 esp_sleep_wakeup_cause_t wakeup_reason;
 
@@ -35,6 +43,38 @@ RTC_DATA_ATTR int bootCount = 0;
 
 //flag for saving data
 bool shouldSaveConfig = false;
+
+void Atualiza_display(void)
+{
+  //ESP.wdtFeed();
+  //v_int = ESP.getVcc(); //pega a tensao interna
+  //String ip_m = String(WiFi.localIP());
+  //String ip_m = String(ip);
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setFont(ArialMT_Plain_10);
+  //display.drawString(0, 0, time_url);
+  //display.drawString(0, 26, ip_m);
+  //display.setFont(ArialMT_Plain_16);
+  //display.drawString(0, 15, "URL: " + String(falha_url_time));
+  //display.drawString(0, 15, "URL: " + String(falha_url_time));  //imprime o numero de falha_url_times de tentativas de pegar hora no servidor
+  //display.drawString(0, 15, relogio_na_atualizacao);
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    display.drawString(70, 15, "Wifi OFF");
+  }
+  else
+    display.drawString(70, 15, "Wifi ON");
+  //display.drawString(70, 15, "V: " + String(v_int));
+  //display.drawString(0, 20, time_url);
+  //display.setFont(ArialMT_Plain_16);
+  //display.drawString(110, 40, String(n_falha_url_time));  //apresenta o numero de erros de conexoes
+  //display.setFont(ArialMT_Plain_24);
+  //display.setFont(Bitstream_Charter_Plain_30);
+  //display.drawString(0, 30, time_atual);
+  display.display();
+  //yield(); //um ciclo sem fazer nada e dar tempo para o processador. evita traver no wifi
+}
 
 //callback notifying us of the need to save config
 void saveConfigCallback()
@@ -90,14 +130,23 @@ void print_wakeup_reason()
 
 void setup()
 {
-  delay(1000);
+  delay(100);
   pinMode(led, OUTPUT);
-  pinMode(2, INPUT_PULLUP);
   digitalWrite(led, HIGH);
   bootCount++;
   Serial.begin(9600);
   Serial.println("");
-  Wire.begin();
+  //Wire.begin();
+
+  ///////// Display 
+  display.init();
+  //display.flipScreenVertically();
+  //display.setContrast(255);
+  //display.clear();
+  //display.setTextAlignment(TEXT_ALIGN_LEFT);
+  //display.setFont(ArialMT_Plain_16);
+  display.drawString(0, 0, "Iniciando Wifi...");
+  display.display();
 
   //função para imprimir a causa do ESP32 despertar
   print_wakeup_reason();
