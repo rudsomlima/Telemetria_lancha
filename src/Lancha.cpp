@@ -10,14 +10,16 @@
 #include <ThingSpeak.h>
 #include <esp_sleep.h>
 //#include <Temperature_LM75_Derived.h>
-#include <wire.h>
-#include "SSD1306.h"
+#include <Wire.h>
+#include <SPI.h>
+#include <SSD1306.h>
+
 //Generic_LM75 temperature;
 
 // Pin definitions for I2C
-#define OLED_SDA 26 // pin 26
-#define OLED_SDC 25 // pin 25
-#define OLED_ADDR 0x78
+#define OLED_SDA 21 // pin 26
+#define OLED_SDC 22 // pin 25
+#define OLED_ADDR 0x3C
 
 SSD1306 display(OLED_ADDR, OLED_SDA, OLED_SDC); // For I2C
 
@@ -32,10 +34,14 @@ char blynk_token[33] = "591b947a24354dd085ef3ae6d7ffa399";
 const int led = 19;
 const int pin_adc_1 = 35; //GPIO usado para captura analógica
 const int pin_adc_2 = 32; //GPIO usado para captura analógica
+const int interrupcao_desl = 17; //pino de interrupcao para desligar bomba
 uint16_t n = 0;
 bool bomba = 0;
 bool bomba_desl = 0;
-// String myStatus = "";
+float tensao_painel;
+float tensao_bateria;
+float fator_painel = 7.575;
+float fator_bateria = 4.545;
 
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 60       /* Time ESP32 will go to sleep (in seconds) */
@@ -43,38 +49,6 @@ RTC_DATA_ATTR int bootCount = 0;
 
 //flag for saving data
 bool shouldSaveConfig = false;
-
-void Atualiza_display(void)
-{
-  //ESP.wdtFeed();
-  //v_int = ESP.getVcc(); //pega a tensao interna
-  //String ip_m = String(WiFi.localIP());
-  //String ip_m = String(ip);
-  display.clear();
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_10);
-  //display.drawString(0, 0, time_url);
-  //display.drawString(0, 26, ip_m);
-  //display.setFont(ArialMT_Plain_16);
-  //display.drawString(0, 15, "URL: " + String(falha_url_time));
-  //display.drawString(0, 15, "URL: " + String(falha_url_time));  //imprime o numero de falha_url_times de tentativas de pegar hora no servidor
-  //display.drawString(0, 15, relogio_na_atualizacao);
-  if (WiFi.status() != WL_CONNECTED)
-  {
-    display.drawString(70, 15, "Wifi OFF");
-  }
-  else
-    display.drawString(70, 15, "Wifi ON");
-  //display.drawString(70, 15, "V: " + String(v_int));
-  //display.drawString(0, 20, time_url);
-  //display.setFont(ArialMT_Plain_16);
-  //display.drawString(110, 40, String(n_falha_url_time));  //apresenta o numero de erros de conexoes
-  //display.setFont(ArialMT_Plain_24);
-  //display.setFont(Bitstream_Charter_Plain_30);
-  //display.drawString(0, 30, time_atual);
-  display.display();
-  //yield(); //um ciclo sem fazer nada e dar tempo para o processador. evita traver no wifi
-}
 
 //callback notifying us of the need to save config
 void saveConfigCallback()
@@ -87,7 +61,7 @@ void publica_web();
 
 void IRAM_ATTR bomba_desligou()
 {
-  detachInterrupt(15);
+  detachInterrupt(interrupcao_desl);
   bomba = 0;
   bomba_desl = 1;
   Serial.print("Bomba: ");
@@ -136,23 +110,25 @@ void setup()
   bootCount++;
   Serial.begin(9600);
   Serial.println("");
-  //Wire.begin();
+  Wire.begin();
 
   ///////// Display 
+  pinMode(OLED_SDA, PULLUP);
+  pinMode(OLED_SDC, PULLUP);
   display.init();
-  //display.flipScreenVertically();
-  //display.setContrast(255);
-  //display.clear();
-  //display.setTextAlignment(TEXT_ALIGN_LEFT);
-  //display.setFont(ArialMT_Plain_16);
+  display.flipScreenVertically();
+  display.setContrast(255);
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setFont(ArialMT_Plain_16);
   display.drawString(0, 0, "Iniciando Wifi...");
   display.display();
 
   //função para imprimir a causa do ESP32 despertar
   print_wakeup_reason();
   pinMode(2, INPUT_PULLDOWN);
-  pinMode(15, INPUT_PULLDOWN);
-  attachInterrupt(digitalPinToInterrupt(15), bomba_desligou, FALLING);
+  pinMode(interrupcao_desl, INPUT_PULLDOWN);
+  attachInterrupt(digitalPinToInterrupt(interrupcao_desl), bomba_desligou, FALLING);
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low //GPIO 02 //volta a habilitar a int da bomba
 
   //read configuration from FS json
@@ -255,19 +231,6 @@ void setup()
 
 void publica_web()
 {
-  int bat_int = analogRead(pin_adc_1);
-  int bat_12v = analogRead(pin_adc_2);
-  float tensao_1 = bat_int * 3.3 / 1024;
-  float tensao_2 = bat_12v * 3.3 / 1024;
-  // // print out the value you read:
-  Serial.print(bootCount);
-  Serial.print(" - bat_int: ");
-  Serial.println(tensao_1);
-  Serial.print(n);
-  Serial.print(" - bat_12v: ");
-  Serial.println(tensao_2);
-  Serial.print("Bomba: ");
-  Serial.println(bomba);
   //Serial.print("Temperature = ");
   //float temp = temperature.readTemperatureC();
   //Serial.print(temp);
@@ -281,16 +244,16 @@ void publica_web()
 
   //Blynk
   Blynk.connect();
-  Blynk.virtualWrite(V1, tensao_1);
-  Blynk.virtualWrite(V2, tensao_2);
+  Blynk.virtualWrite(V1, tensao_painel);
+  Blynk.virtualWrite(V2, tensao_bateria);
   Blynk.virtualWrite(V3, bootCount);
   //Blynk.virtualWrite(V4, temp);
   if(bomba==1)  Blynk.virtualWrite(V4, 255); //manda o estado da bomba
   else Blynk.virtualWrite(V4, 0); //manda o estado da bomba
 
   //ThingSpeak
-  ThingSpeak.setField(1, tensao_1);
-  ThingSpeak.setField(2, tensao_2);
+  ThingSpeak.setField(1, tensao_painel);
+  ThingSpeak.setField(2, tensao_bateria);
   ThingSpeak.setField(3, bootCount);
   ThingSpeak.setField(4, bomba);
   //ThingSpeak.setField(4, temp);
@@ -312,6 +275,19 @@ void publica_web()
 void loop()
 {
   delay(250);
+  int bat_int = analogRead(pin_adc_1);
+  int bat_12v = analogRead(pin_adc_2);
+  tensao_painel = fator_painel * bat_int * 3.3 / 1024;
+  tensao_bateria = fator_bateria * bat_12v * 3.3 / 1024;
+  // // print out the value you read:
+  Serial.print(bootCount);
+  Serial.print(" - tensao_painel: ");
+  Serial.println(tensao_painel);
+  Serial.print(bootCount);
+  Serial.print(" - tensao_bateria: ");
+  Serial.println(tensao_bateria);
+  Serial.print("Bomba: ");
+  Serial.println(bomba);
   publica_web();
   digitalWrite(led, LOW);
   if (bomba == 0)
