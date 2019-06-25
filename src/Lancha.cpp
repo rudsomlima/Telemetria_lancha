@@ -315,10 +315,9 @@ void loop()
   }
   while (bomba_desl==0)
   {
-    digitalWrite(led, HIGH);
-    delay(250);
-    digitalWrite(led, LOW);    
-    delay(250);
+    leituras();
+    publica_blink();
+    delay(300);
   }
   publica_blink();
   publica_thingspeak();
