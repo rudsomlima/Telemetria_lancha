@@ -36,8 +36,7 @@ const int pin_adc_1 = 35; //GPIO usado para captura analógica
 const int pin_adc_2 = 32; //GPIO usado para captura analógica
 const int interrupcao_desl = 17; //pino de interrupcao para desligar bomba
 uint16_t n = 0;
-bool bomba = 0;
-bool bomba_desl = 0;
+bool bomba = 0; bool bomba_desl = 0; bool flag_toque=0; bool flag_calibracao=0;
 float tensao_painel;
 float tensao_bateria;
 float fator_painel = 7.575;
@@ -45,7 +44,7 @@ float fator_bateria = 4.545;
 
 #define uS_TO_S_FACTOR 1000000 /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 60       /* Time ESP32 will go to sleep (in seconds) */
-RTC_DATA_ATTR int bootCount = 0;
+RTC_DATA_ATTR uint16_t bootCount = 0;
 
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -57,15 +56,21 @@ void saveConfigCallback()
   shouldSaveConfig = true;
 }
 
-void publica_web();
-
-void IRAM_ATTR bomba_desligou()
+void IRAM_ATTR bomba_desligou(void)
 {
   detachInterrupt(interrupcao_desl);
   bomba = 0;
   bomba_desl = 1;
   Serial.print("Bomba: ");
   Serial.println(bomba);  
+}
+
+void IRAM_ATTR touch(void)
+{
+  touch_pad_intr_disable();
+ //detachInterrupt(13); //pino 13 é o touch T4
+  flag_toque = 1;
+  Serial.println("__________HOUVE TOQUE NO PIN 13");
 }
 
 void print_wakeup_reason()
@@ -110,24 +115,13 @@ void setup()
   bootCount++;
   Serial.begin(9600);
   Serial.println("");
-  Wire.begin();
-
-  ///////// Display 
-  pinMode(OLED_SDA, PULLUP);
-  pinMode(OLED_SDC, PULLUP);
-  display.init();
-  display.flipScreenVertically();
-  display.setContrast(255);
-  display.clear();
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(0, 0, "Iniciando Wifi...");
-  display.display();
+  //Wire.begin();
 
   //função para imprimir a causa do ESP32 despertar
   print_wakeup_reason();
   pinMode(2, INPUT_PULLDOWN);
   pinMode(interrupcao_desl, INPUT_PULLDOWN);
+  touchAttachInterrupt(T4, touch, 80);
   attachInterrupt(digitalPinToInterrupt(interrupcao_desl), bomba_desligou, FALLING);
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_2, 1); //1 = High, 0 = Low //GPIO 02 //volta a habilitar a int da bomba
 
@@ -226,10 +220,26 @@ void setup()
   // analogSetAttenuation(ADC_6db); // Default is 11db which is very noisy. Recommended to use 2.5 or 6.
   ThingSpeak.begin(client);
   Blynk.config(blynk_token);
+  Blynk.connect();
   esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
 }
 
-void publica_web()
+void publica_blink() {  
+  Blynk.virtualWrite(V1, tensao_painel);
+  Blynk.virtualWrite(V2, tensao_bateria);
+  Blynk.virtualWrite(V3, bootCount);
+  //Blynk.virtualWrite(V4, temp);
+  if (bomba == 1)
+    Blynk.virtualWrite(V4, 255); //manda o estado da bomba
+  else
+    Blynk.virtualWrite(V4, 0); //manda o estado da bomba
+  if (flag_calibracao == 1)
+    Blynk.virtualWrite(V5, 255); //manda o estado da bomba
+  else
+    Blynk.virtualWrite(V5, 0); //manda o estado da bomba
+}
+
+void publica_thingspeak()
 {
   //Serial.print("Temperature = ");
   //float temp = temperature.readTemperatureC();
@@ -241,15 +251,6 @@ void publica_web()
   //Serial.println(SCL);
   //Serial.print("Clock: ");
   //Serial.println(Wire.getClock());
-
-  //Blynk
-  Blynk.connect();
-  Blynk.virtualWrite(V1, tensao_painel);
-  Blynk.virtualWrite(V2, tensao_bateria);
-  Blynk.virtualWrite(V3, bootCount);
-  //Blynk.virtualWrite(V4, temp);
-  if(bomba==1)  Blynk.virtualWrite(V4, 255); //manda o estado da bomba
-  else Blynk.virtualWrite(V4, 0); //manda o estado da bomba
 
   //ThingSpeak
   ThingSpeak.setField(1, tensao_painel);
@@ -272,13 +273,16 @@ void publica_web()
   }
 }
 
-void loop()
-{
-  delay(250);
-  int bat_int = analogRead(pin_adc_1);
-  int bat_12v = analogRead(pin_adc_2);
-  tensao_painel = fator_painel * bat_int * 3.3 / 1024;
-  tensao_bateria = fator_bateria * bat_12v * 3.3 / 1024;
+void leituras() {
+  int bat_int=0;
+  int bat_12v=0;
+  for(n=0;n<100;n++) {
+    bat_int = analogRead(pin_adc_1) + bat_int;
+    bat_12v = analogRead(pin_adc_2) + bat_12v;    
+  }
+  tensao_painel = (fator_painel * bat_int * 3.3 / 1024) / 100;
+  tensao_bateria = (fator_bateria * bat_12v * 3.3 / 1024) / 100;
+
   // // print out the value you read:
   Serial.print(bootCount);
   Serial.print(" - tensao_painel: ");
@@ -288,8 +292,22 @@ void loop()
   Serial.println(tensao_bateria);
   Serial.print("Bomba: ");
   Serial.println(bomba);
-  publica_web();
+}
+
+void loop()
+{
+  delay(250);  
+  leituras();
+  publica_blink();
   digitalWrite(led, LOW);
+
+  while(flag_toque==1) {
+    flag_calibracao = 1;
+    leituras();
+    publica_blink();
+    delay(300);
+  }
+
   if (bomba == 0)
   {    
     Serial.println("Bomba não foi ligada. Indo dormir");
@@ -302,7 +320,8 @@ void loop()
     digitalWrite(led, LOW);    
     delay(250);
   }
-  publica_web();
+  publica_blink();
+  publica_thingspeak();
   Serial.print("Bomba desligou e foi dormir");
   esp_deep_sleep_start(); //se a bomba desligou pode ir domir
   // int state = digitalRead(LED_BUILTIN);
