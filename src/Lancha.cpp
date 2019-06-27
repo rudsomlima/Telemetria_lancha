@@ -299,9 +299,10 @@ void loop()
   delay(250);  
   leituras();
   publica_blink();
+  publica_thingspeak();
   digitalWrite(led, LOW);
 
-  while(flag_toque==1) {
+  while(flag_toque==1) {   //loop se tocar no pino touch 13 - calibração
     flag_calibracao = 1;
     leituras();
     publica_blink();
@@ -313,7 +314,8 @@ void loop()
     Serial.println("Bomba não foi ligada. Indo dormir");
     esp_deep_sleep_start(); //se a bomba nao foi ligada, pode ir domir
   }
-  while (bomba_desl==0)
+
+  while (bomba_desl==0)   //loop se estiver com a bomba ligada
   {
     leituras();
     publica_blink();
