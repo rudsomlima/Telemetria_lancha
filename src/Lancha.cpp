@@ -113,8 +113,13 @@ void setup()
 
   lcd.begin();
   lcd.setContrast(50);
+  lcd.clearDisplay();
+  lcd.setTextSize(1);
+  lcd.setTextColor(BLACK);
+  lcd.setCursor(0, 0);
+  lcd.println("Ligando...");
   lcd.display();
-  delay(10000);
+  //delay(10000);
   //Wire.begin();
 
   //função para imprimir a causa do ESP32 despertar
@@ -212,6 +217,8 @@ void setup()
   Serial.print("local ip: ");
   Serial.println(WiFi.localIP());
   Serial.println("ESP conectado no WIFI !");
+  lcd.println(WiFi.localIP());
+  lcd.display();
   adcAttachPin(pin_adc_1);
   adcAttachPin(pin_adc_2);
   // analogSetClockDiv(255); // 1338mS
@@ -294,6 +301,18 @@ void leituras() {
   Serial.println(bomba);
 }
 
+void mostra_display() {
+  lcd.clearDisplay();
+  lcd.setTextSize(1);
+  lcd.setTextColor(BLACK);
+  lcd.setCursor(0, 0);
+  lcd.print("Painel:  ");
+  lcd.printf("%4.1f\n", tensao_painel);
+  lcd.print("Bateria: ");
+  lcd.printf("%4.1f", tensao_bateria);
+  lcd.display();
+}
+
 void loop()
 {
   delay(250);  
@@ -305,7 +324,9 @@ void loop()
   while(flag_toque==1) {   //loop se tocar no pino touch 13 - calibração
     flag_calibracao = 1;
     leituras();
-    publica_blink();
+    lcd.display();
+    mostra_display();
+    //publica_blink();
     delay(300);
   }
 
@@ -319,6 +340,7 @@ void loop()
   {
     leituras();
     publica_blink();
+    mostra_display();
     delay(300);
   }
   publica_blink();
