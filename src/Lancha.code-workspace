@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "C:\\Users\\rudsom.lima.PRFRN\\Documents\\PlatformIO\\Projects\\Telemetria_lancha"
+		},
+		{
+			"name": "Bateria_lancha",
+			"path": "C:\\Users\\rudsom.lima.PRFRN\\Documents\\PlatformIO\\Projects\\Bateria_lancha"
+		}
+	],
+	"settings": {
+		"terminal.integrated.env.windows": {
+			"PATH": "C:\\Users\\rudsom.lima.PRFRN\\.platformio\\penv\\Scripts;C:\\Users\\rudsom.lima.PRFRN\\.platformio\\penv;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath;C:\\Users\\rudsom.lima\\Downloads\\grails-3.3.5\\grails-3.3.5\\bin;C:\\Program Files\\Java\\jdk1.8.0_144\\bin;C:\\Windows;C:\\Windows\\system32;C:\\Program Files\\LLVM\\bin;C:\\Program Files\\Git\\cmd;;C:\\Users\\rudsom.lima.PRFRN\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath;C:\\Users\\rudsom.lima\\Downloads\\grails-3.3.5\\grails-3.3.5\\bin;C:\\Program Files\\Java\\jdk1.8.0_144\\bin;C:\\Windows;C:\\Windows\\system32;C:\\Program Files\\LLVM\\bin;C:\\Program Files\\Git\\cmd;;C:\\Users\\rudsom.lima.PRFRN\\AppData\\Local\\Programs\\Microsoft VS Code\\bin",
+			"PLATFORMIO_CALLER": "vscode"
+		}
+	}
+}

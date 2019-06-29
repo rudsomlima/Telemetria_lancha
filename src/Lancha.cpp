@@ -10,18 +10,13 @@
 #include <ThingSpeak.h>
 #include <esp_sleep.h>
 //#include <Temperature_LM75_Derived.h>
-#include <Wire.h>
-#include <SPI.h>
-#include <SSD1306.h>
+//#include <Wire.h>
+#include <SPI.h> // for PCD8544
+#include <Adafruit_GFX.h>
+#include <Adafruit_PCD8544.h> // 48 × 84 pixels matrix LCD controller/driver. PCD8544
+Adafruit_PCD8544 lcd = Adafruit_PCD8544(19, 14, 5);
 
 //Generic_LM75 temperature;
-
-// Pin definitions for I2C
-#define OLED_SDA 21 // pin 26
-#define OLED_SDC 22 // pin 25
-#define OLED_ADDR 0x3C
-
-SSD1306 display(OLED_ADDR, OLED_SDA, OLED_SDC); // For I2C
 
 esp_sleep_wakeup_cause_t wakeup_reason;
 
@@ -115,6 +110,11 @@ void setup()
   bootCount++;
   Serial.begin(9600);
   Serial.println("");
+
+  lcd.begin();
+  lcd.setContrast(50);
+  lcd.display();
+  delay(10000);
   //Wire.begin();
 
   //função para imprimir a causa do ESP32 despertar
