@@ -11,10 +11,15 @@
 #include <esp_sleep.h>
 //#include <Temperature_LM75_Derived.h>
 //#include <Wire.h>
-#include <SPI.h> // for PCD8544
 #include <Adafruit_GFX.h>
-#include <Adafruit_PCD8544.h> // 48 × 84 pixels matrix LCD controller/driver. PCD8544
-Adafruit_PCD8544 lcd = Adafruit_PCD8544(19, 14, 5);
+#include <Adafruit_SSD1306.h>
+#include <Fonts/FreeSerif12pt7b.h>
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //Generic_LM75 temperature;
 
@@ -23,6 +28,7 @@ esp_sleep_wakeup_cause_t wakeup_reason;
 unsigned long myChannelNumber = 38484;
 const char *myWriteAPIKey = "UW9T0WNPQPVY7QPB";
 WiFiClient client;
+String ssid;
 
 char blynk_token[33] = "591b947a24354dd085ef3ae6d7ffa399";
 
@@ -110,15 +116,21 @@ void setup()
   bootCount++;
   Serial.begin(9600);
   Serial.println("");
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+  {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;)
+      ; // Don't proceed, loop forever
+  }
+  delay(1000);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  // Display static text
+  display.println("LIGANDO...");
+  display.display();
 
-  lcd.begin();
-  lcd.setContrast(50);
-  lcd.clearDisplay();
-  lcd.setTextSize(1);
-  lcd.setTextColor(BLACK);
-  lcd.setCursor(0, 0);
-  lcd.println("Ligando...");
-  lcd.display();
   //delay(10000);
   //Wire.begin();
 
@@ -217,8 +229,9 @@ void setup()
   Serial.print("local ip: ");
   Serial.println(WiFi.localIP());
   Serial.println("ESP conectado no WIFI !");
-  lcd.println(WiFi.localIP());
-  lcd.display();
+  ssid = WiFi.SSID();
+  //display.println(WiFi.localIP());
+  //display.display();
   adcAttachPin(pin_adc_1);
   adcAttachPin(pin_adc_2);
   // analogSetClockDiv(255); // 1338mS
@@ -299,18 +312,27 @@ void leituras() {
   Serial.println(tensao_bateria);
   Serial.print("Bomba: ");
   Serial.println(bomba);
+  long rssi = WiFi.RSSI();
+  Serial.println(rssi);
 }
 
 void mostra_display() {
-  lcd.clearDisplay();
-  lcd.setTextSize(1);
-  lcd.setTextColor(BLACK);
-  lcd.setCursor(0, 0);
-  lcd.print("Painel:  ");
-  lcd.printf("%4.1f\n", tensao_painel);
-  lcd.print("Bateria: ");
-  lcd.printf("%4.1f", tensao_bateria);
-  lcd.display();
+  delay(100);
+  display.clearDisplay();
+  display.setFont();  
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.print(ssid);  
+  display.setFont(&FreeSerif12pt7b);
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 32);
+  display.print("[ ");
+  display.printf("%4.1f", tensao_painel);
+  display.setCursor(0, 60);
+  display.print("] ");
+  display.printf("%4.1f", tensao_bateria);
+  display.display();
 }
 
 void loop()
@@ -324,7 +346,7 @@ void loop()
   while(flag_toque==1) {   //loop se tocar no pino touch 13 - calibração
     flag_calibracao = 1;
     leituras();
-    lcd.display();
+    display.display();
     mostra_display();
     //publica_blink();
     delay(300);
